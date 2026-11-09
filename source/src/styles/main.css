@@ -84,7 +84,7 @@ img {
 /* ---------- shell ---------- */
 
 .shell {
-  width: min(1420px, 100% - 44px);
+  width: min(1720px, 100% - 40px);
   margin: 0 auto;
 }
 
@@ -293,14 +293,14 @@ img {
 
 .grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(362px, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 14px;
   align-items: start;
 }
 
 .node {
   display: block;
-  padding: 17px 18px 15px;
+  padding: 15px 15px 13px;
   border: 1px solid var(--line);
   border-radius: var(--radius);
   background: linear-gradient(180deg, var(--card-2), var(--card) 42%);
@@ -340,7 +340,7 @@ img {
 .node-name {
   overflow: hidden;
   margin: 0;
-  font-size: 16px;
+  font-size: 15px;
   font-weight: 640;
   letter-spacing: -0.01em;
   text-overflow: ellipsis;
@@ -373,7 +373,7 @@ img {
 .metrics {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 16px 22px;
+  gap: 14px 16px;
 }
 
 .metric {
@@ -389,7 +389,7 @@ img {
 
 .metric-label {
   overflow: hidden;
-  font-size: 12.5px;
+  font-size: 11.5px;
   white-space: nowrap;
   font-weight: 560;
   letter-spacing: 0.01em;
@@ -399,7 +399,7 @@ img {
   flex: 0 0 auto;
   margin-left: auto;
   white-space: nowrap;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 620;
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -409,7 +409,7 @@ img {
 .metric-value span {
   margin-left: 1px;
   color: #7b7d86;
-  font-size: 11.5px;
+  font-size: 10.5px;
   font-weight: 500;
   letter-spacing: 0;
 }
@@ -419,7 +419,7 @@ img {
   margin-bottom: 6px;
   color: var(--dim);
   font-family: var(--mono);
-  font-size: 11px;
+  font-size: 10px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -459,26 +459,26 @@ img {
 .net {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px 22px;
+  gap: 8px 14px;
 }
 
 .net-item {
   display: flex;
   align-items: center;
-  gap: 7px;
+  gap: 6px;
   min-width: 0;
 }
 
 .net-item .net-label {
   color: var(--dim);
-  font-size: 12px;
+  font-size: 11px;
   white-space: nowrap;
 }
 
 .net-item .net-value {
   margin-left: auto;
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
 }
@@ -498,14 +498,16 @@ img {
   gap: 6px;
   color: var(--dim);
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 10.5px;
+  white-space: nowrap;
 }
 
 .traffic-value {
   margin-left: auto;
   font-family: var(--mono);
-  font-size: 12.5px;
+  font-size: 11.5px;
   font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
 
 .traffic-value b {
@@ -533,21 +535,21 @@ img {
 .lat-name {
   overflow: hidden;
   color: var(--text-soft);
-  font-size: 12.5px;
+  font-size: 11.5px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
 .lat-ms {
   font-family: var(--mono);
-  font-size: 13px;
+  font-size: 12px;
   font-variant-numeric: tabular-nums;
 }
 
 .lat-loss {
-  min-width: 46px;
+  min-width: 40px;
   font-family: var(--mono);
-  font-size: 11.5px;
+  font-size: 10.5px;
   text-align: right;
   color: var(--faint);
 }
@@ -571,20 +573,20 @@ img {
 .foot-cell {
   display: flex;
   align-items: baseline;
-  gap: 7px;
+  gap: 5px;
   min-width: 0;
 }
 
 .foot-label {
   color: var(--faint);
-  font-size: 11.5px;
+  font-size: 10px;
   white-space: nowrap;
 }
 
 .foot-value {
   overflow: hidden;
   font-family: var(--mono);
-  font-size: 12px;
+  font-size: 10.5px;
   font-variant-numeric: tabular-nums;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -820,15 +822,31 @@ img {
   gap: 14px;
 }
 
+@media (max-width: 1400px) {
+  .grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 1060px) {
+  .grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
 @media (max-width: 900px) {
   .strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
 @media (max-width: 640px) {
   .shell {
-    width: min(1420px, 100% - 24px);
+    width: min(1720px, 100% - 24px);
   }
 
   .grid {

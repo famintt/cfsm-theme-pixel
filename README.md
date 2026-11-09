@@ -91,6 +91,7 @@ CF-Server-Monitor 支持「第三方主题」：后台填一个 GitHub 仓库地
 ### 总览页
 
 - **顶部四格汇总**：`在线/总数`、本月流量合计、实时速率合计、三网平均延迟。
+- **一行 5 张卡**：桌面（≥1400px）默认 5 列，屏幕变窄依次降到 4 / 3 / 2 / 1 列。
 - **节点卡片**，每张卡包含：
   - 状态点（在线绿 / 离线红）+ 节点名 + 系统图标 + 地区国旗；
   - 2×2 度量块：CPU、内存、磁盘、负载，各带副行（核数 / 已用总容量 / 负载三元组）与分段点阵条；
@@ -139,13 +140,13 @@ CF-Server-Monitor 支持「第三方主题」：后台填一个 GitHub 仓库地
 cfsm-theme-pixel/
 ├── index.html                     # 构建产物入口（主题加载器读的就是这个）
 ├── assets/                        # 构建产物：8 个 js/css，约 182 KB
-│   ├── index-CpWITlFY.js          # 145 KB，Vue 运行时 + 通用逻辑
-│   ├── index-Xv1XHl35.css         # 15 KB，全部样式与设计变量
-│   ├── Dashboard-DVr-v-PI.js
+│   ├── index-BJwlcxxF.js          # 145 KB，Vue 运行时 + 通用逻辑
+│   ├── index-CbvQQ41A.css         # 15 KB，全部样式与设计变量
+│   ├── Dashboard-COW4zYzo.js
 │   ├── Dashboard-DMlLoFsP.css
-│   ├── ServerDetail-r6Z3A3hD.js
+│   ├── ServerDetail-CGg2exsp.js
 │   ├── ServerDetail-CFsPjZd5.css
-│   ├── PixelFooter-B9EZ_r0y.js
+│   ├── PixelFooter-DOd_2jlt.js
 │   └── PixelFooter-BIHoZK52.css
 ├── source/                        # 完整源码（不影响主题加载）
 │   ├── src/
@@ -445,8 +446,9 @@ cp source/dist/index.html .
 - **主色**：`--cpu`（`#3ea6ff`，同时充当整站的强调色）。
 - **四块度量的颜色**：`--cpu` / `--ram` / `--disk` / `--load`；网络箭头用 `--up` / `--down`，状态用 `--ok` / `--warn` / `--bad`。
 - **点阵密度**：`SegBar` 的 `cells`（卡片度量 15、卡片流量 22、详情度量 24、详情流量 32）。
-- **卡片最小宽度**：`.grid { grid-template-columns: repeat(auto-fill, minmax(362px, 1fr)) }`。
-- **断点**：`980px`（详情单栏）、`860px`（汇总两列、卡片两列）。
+- **每行卡片数**：`.grid { grid-template-columns: repeat(5, minmax(0, 1fr)) }` —— 默认一行 5 张。
+- **断点**：`1400px` 降到 4 列、`1060px` 3 列、`900px` 2 列（同时汇总变两列）、`640px` 1 列。
+- **页面宽度**：`.shell { width: min(1720px, 100% - 40px) }`。
 
 ---
 
