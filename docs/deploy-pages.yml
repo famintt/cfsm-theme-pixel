@@ -1,0 +1,81 @@
+name: Deploy Aurora theme
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Validate API base
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+        run: |
+          if [ -z "$API_BASE" ]; then
+            echo "::error::Repository secret API_BASE is required (comma-separated Worker origins)."
+            exit 1
+          fi
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        env:
+          API_BASE: ${{ secrets.API_BASE }}
+          TITLE: ${{ secrets.TITLE }}
+          BACKGROUND_IMAGE: ${{ secrets.BACKGROUND_IMAGE }}
+          CSP_API: ${{ secrets.CSP_API }}
+          CSP_STATIC: ${{ secrets.CSP_STATIC }}
+        run: npm run build
+
+      - name: Publish dist branch
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          message="$(git log -1 --pretty=%s)"
+
+          worktree="$RUNNER_TEMP/aurora-dist"
+          if git ls-remote --exit-code --heads origin dist >/dev/null 2>&1; then
+            git fetch --depth=1 origin dist
+            git worktree add --detach "$worktree" FETCH_HEAD
+            cd "$worktree"
+            git switch -C dist
+          else
+            git worktree add --detach "$worktree" HEAD
+            cd "$worktree"
+            git switch --orphan dist
+          fi
+
+          find . -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -R "$GITHUB_WORKSPACE/dist/." .
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No content changes to publish."
+            exit 0
+          fi
+
+          git commit -m "$message"
+          git push origin HEAD:dist
