@@ -17,8 +17,19 @@ const monthIn = computed(() => servers.value.reduce((sum, server) => sum + (Numb
 const monthOut = computed(() => servers.value.reduce((sum, server) => sum + (Number(server.net_tx_monthly) || 0), 0))
 const monthTotal = computed(() => servers.value.reduce((sum, server) => sum + monthTraffic(server), 0))
 
-const speedIn = computed(() => monitor.stats.globalSpeedIn || 0)
-const speedOut = computed(() => monitor.stats.globalSpeedOut || 0)
+// Live sum over the rendered list, not the /api/servers snapshot: WebSocket
+// batch updates patch each server in place, so this recomputes as they arrive.
+// Summing monitor.stats instead would freeze the tile at the last poll.
+const speedIn = computed(() =>
+  servers.value.length
+    ? servers.value.reduce((sum, server) => sum + (Number(server.net_in_speed) || 0), 0)
+    : monitor.stats.globalSpeedIn || 0
+)
+const speedOut = computed(() =>
+  servers.value.length
+    ? servers.value.reduce((sum, server) => sum + (Number(server.net_out_speed) || 0), 0)
+    : monitor.stats.globalSpeedOut || 0
+)
 const speedTotal = computed(() => speedIn.value + speedOut.value)
 
 const latency = computed(() => {
