@@ -16,8 +16,7 @@ import {
   formatDateTime,
   formatSpeed,
   isServerOnline,
-  latencyRoutes,
-  monthTraffic,
+  latencyRoutes, utcMonthlyTraffic, trafficUsage, validNumber, capacityPair,
   normalizeTimestamp,
   osIconUrl,
   osLabel,
@@ -50,7 +49,7 @@ const flag = computed(() => (server.value ? flagUrl(server.value.region) : ''))
 
 const cpuPct = computed(() => {
   const value = Number(server.value?.cpu)
-  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0
+  return validNumber(server.value?.cpu) && value >= 0 ? Math.max(0, Math.min(100, value)) : null
 })
 const ramPct = computed(() => serverRamPercent(server.value))
 const diskPct = computed(() => serverDiskPercent(server.value))
@@ -65,16 +64,13 @@ const cores = computed(() => Number(server.value?.cpu_cores) || 0)
 const loadPct = computed(() => Math.min(100, (loadFirst.value / (cores.value || 1)) * 100))
 const loadFoot = computed(() => loadValues.value.map((v) => (Number.isFinite(v) ? v.toFixed(2) : '0.00')).join(' / '))
 
-const ramFoot = computed(() =>
-  pairBytes((Number(server.value?.ram_used) || 0) * 1024 ** 2, (Number(server.value?.ram_total) || 0) * 1024 ** 2)
-)
-const diskFoot = computed(() =>
-  pairBytes((Number(server.value?.disk_used) || 0) * 1024 ** 2, (Number(server.value?.disk_total) || 0) * 1024 ** 2)
-)
+const ramFoot = computed(() => capacityPair(server.value?.ram_used, server.value?.ram_total))
+const diskFoot = computed(() => capacityPair(server.value?.disk_used, server.value?.disk_total))
 
 const limit = computed(() => trafficLimitBytes(server.value))
-const trafficUsed = computed(() => monthTraffic(server.value))
-const trafficPct = computed(() => (limit.value > 0 ? trafficPercent(server.value) : 0))
+const monthly = computed(() => utcMonthlyTraffic(server.value || {}, monitor.now))
+const trafficUsed = computed(() => trafficUsage(server.value || {}, monitor.now))
+const trafficPct = computed(() => (limit.value > 0 ? trafficPercent(server.value, monitor.now) : 0))
 const trafficText = computed(() =>
   limit.value > 0
     ? `${formatBytes(trafficUsed.value)} / ${formatBytes(limit.value)}`
@@ -104,7 +100,8 @@ const latRows = computed(() => {
       name: names[key],
       ok,
       ms,
-      lossText: Number.isFinite(loss) && loss > 0 ? `${loss.toFixed(1)}%` : '0%',
+      lossText: server.value?.[`loss_${key}`] === null ? t('timeout') : server.value?.[`loss_${key}`] === false || server.value?.[`loss_${key}`] === undefined ? '—' : Number.isFinite(loss) ? `${loss.toFixed(1)}%` : '—',
+      timeout: route_.state === 'timeout',
       lossBad: Number.isFinite(loss) && loss > 0,
       tone: ok ? (ms < 120 ? 'good' : ms < 250 ? 'warn' : 'bad') : 'off',
       gauge: ok ? Math.max(6, Math.min(100, 100 - (ms / 400) * 100)) : 0
@@ -116,45 +113,54 @@ const latColor = (tone) =>
   tone === 'good' ? '#22c55e' : tone === 'warn' ? '#eab308' : tone === 'bad' ? '#ef4444' : '#3a3b42'
 
 const fmtPct = (value) => {
-  const number = Math.max(0, Math.min(100, Number(value) || 0))
-  return number < 10 ? number.toFixed(2) : number.toFixed(1)
+  const number = Number(value)
+  if (value === null || value === undefined || value === false || !Number.isFinite(number)) return '—'
+  const safe = Math.max(0, Math.min(100, number))
+  return safe < 10 ? safe.toFixed(2) : safe.toFixed(1)
 }
 
 let socketStarted = false
+let disposed=false
+let loadEpoch=0
 
 async function load() {
+  const epoch=++loadEpoch,id=serverId.value
+  if(disposed||!id)return
   loading.value = true
   error.value = ''
   try {
-    const result = await fetchServer(serverId.value)
+    const result = await fetchServer(id)
+    if(disposed||epoch!==loadEpoch||serverId.value!==id)return
     server.value = result.server
     base.value = result.base
     if (!socketStarted) {
       socketStarted = true
       startServerSocket(base.value, serverId.value, {
         onUpdate: (id, data, ts) => {
-          if (String(id) !== serverId.value || !server.value) return
-          for (const [key, value] of Object.entries(data || {})) {
-            if (value !== undefined) server.value[key] = value
-          }
-          server.value.last_updated = Date.now()
-          server.value.report_timestamp = normalizeTimestamp(ts) || Date.now()
+          if (disposed || String(id) !== serverId.value || !server.value) return
+          server.value = { ...data }
         }
       })
     }
   } catch (err) {
+    if(disposed||epoch!==loadEpoch)return
     error.value = err?.message || t('loadFailed')
   } finally {
-    loading.value = false
+    if(!disposed&&epoch===loadEpoch)loading.value = false
   }
 }
 
-onMounted(() => {
-  initMonitor()
-  load()
+function onResumed(){if(!disposed)void load()}
+onMounted(async () => {
+  window.addEventListener('cfsm:resumed',onResumed)
+  const ok=await initMonitor()
+  if(disposed)return
+  if (ok) await load()
+  else { loading.value=false; error.value=monitor.error || t('loadFailed') }
 })
 
 onBeforeUnmount(() => {
+  disposed=true;loadEpoch+=1;window.removeEventListener('cfsm:resumed',onResumed)
   stopAllSockets()
 })
 </script>
@@ -199,7 +205,7 @@ onBeforeUnmount(() => {
                 <div class="metric-top">
                   <AppIcon name="cpu" :size="15" class="tone-cpu" />
                   <span class="metric-label tone-cpu">{{ t('cpu') }}</span>
-                  <span class="big-value">{{ online ? fmtPct(cpuPct) : '—' }}<em>%</em></span>
+                  <span class="big-value">{{ online ? fmtPct(cpuPct) : '—' }}<em v-if="online && cpuPct !== null">%</em></span>
                 </div>
                 <div class="metric-sub">{{ cores ? t('cores', { n: cores }) : '—' }}</div>
                 <SegBar :value="online ? cpuPct : 0" :cells="24" :height="8" color="#3ea6ff" />
@@ -209,7 +215,7 @@ onBeforeUnmount(() => {
                 <div class="metric-top">
                   <AppIcon name="memory" :size="15" class="tone-ram" />
                   <span class="metric-label tone-ram">{{ t('memory') }}</span>
-                  <span class="big-value">{{ online ? fmtPct(ramPct) : '—' }}<em>%</em></span>
+                  <span class="big-value">{{ online ? fmtPct(ramPct) : '—' }}<em v-if="online && ramPct !== null">%</em></span>
                 </div>
                 <div class="metric-sub">{{ ramFoot }}</div>
                 <SegBar :value="online ? ramPct : 0" :cells="24" :height="8" color="#a855f7" />
@@ -219,7 +225,7 @@ onBeforeUnmount(() => {
                 <div class="metric-top">
                   <AppIcon name="disk" :size="15" class="tone-disk" />
                   <span class="metric-label tone-disk">{{ t('disk') }}</span>
-                  <span class="big-value">{{ online ? fmtPct(diskPct) : '—' }}<em>%</em></span>
+                  <span class="big-value">{{ online ? fmtPct(diskPct) : '—' }}<em v-if="online && diskPct !== null">%</em></span>
                 </div>
                 <div class="metric-sub">{{ diskFoot }}</div>
                 <SegBar :value="online ? diskPct : 0" :cells="24" :height="8" color="#f59e0b" />
@@ -242,22 +248,22 @@ onBeforeUnmount(() => {
               <div class="net-item">
                 <AppIcon name="upload" :size="13" class="tone-up" />
                 <span class="net-label">{{ t('upload') }}</span>
-                <span class="net-value tone-up">{{ formatSpeed(server.net_out_speed) }}</span>
+                <span class="net-value tone-up">{{ formatSpeed(online ? server.net_out_speed : null) }}</span>
               </div>
               <div class="net-item">
                 <AppIcon name="download" :size="13" class="tone-down" />
                 <span class="net-label">{{ t('download') }}</span>
-                <span class="net-value tone-down">{{ formatSpeed(server.net_in_speed) }}</span>
+                <span class="net-value tone-down">{{ formatSpeed(online ? server.net_in_speed : null) }}</span>
               </div>
-              <div class="net-item">
+              <div v-if="sys.show_tf" class="net-item">
                 <AppIcon name="globe" :size="13" />
                 <span class="net-label">{{ t('monthOut') }}</span>
-                <span class="net-value">{{ formatBytes(server.net_tx_monthly) }}</span>
+                <span class="net-value">{{ formatBytes(monthly.tx) }}</span>
               </div>
-              <div class="net-item">
+              <div v-if="sys.show_tf" class="net-item">
                 <AppIcon name="globe" :size="13" />
                 <span class="net-label">{{ t('monthIn') }}</span>
-                <span class="net-value">{{ formatBytes(server.net_rx_monthly) }}</span>
+                <span class="net-value">{{ formatBytes(monthly.rx) }}</span>
               </div>
             </div>
 
@@ -267,20 +273,21 @@ onBeforeUnmount(() => {
                 <span class="traffic-note"><AppIcon name="clock" :size="13" /> {{ t('monthTraffic') }}</span>
                 <span class="traffic-value">
                   <b>{{ trafficText }}</b>
-                  <span v-if="limit > 0"> · {{ trafficPct.toFixed(1) }}%</span>
+                  <span v-if="limit > 0 && monthly.eligible"> · {{ trafficPct.toFixed(1) }}%</span>
                 </span>
               </div>
+              <p v-if="!monthly.eligible" class="metric-sub">{{ monthly.reason }}</p>
               <SegBar :value="trafficPct" :cells="32" :height="9" ramp="heat" />
             </template>
           </section>
 
-          <section v-if="sys.show_three_net_details" class="panel-card">
+          <section v-if="sys.show_three_net_details && online" class="panel-card">
             <h2 class="panel-title"><AppIcon name="wifi" :size="13" /> {{ t('latency') }}</h2>
             <div class="latency">
               <div v-for="row in latRows" :key="row.key" class="lat-row">
                 <span class="lat-name">{{ row.name }}</span>
                 <span class="lat-ms" :style="{ color: latColor(row.tone) }">
-                  {{ row.ok ? `${row.ms} ms` : '—' }}
+                  {{ row.ok ? `${row.ms} ms` : row.timeout ? t('timeout') : '—' }}
                 </span>
                 <span class="lat-loss" :style="row.lossBad ? { color: '#f59e0b' } : null">
                   {{ row.lossText }}
@@ -294,8 +301,8 @@ onBeforeUnmount(() => {
             <h2 class="panel-title"><AppIcon name="server" :size="13" /> {{ t('info') }}</h2>
             <dl class="facts">
               <div><dt>{{ t('uptime') }}</dt><dd>{{ uptimeDays }} {{ t('days') }}</dd></div>
-              <div><dt>{{ t('expire') }}</dt><dd>{{ expire ? `${Math.max(0, expire.days)} ${t('days')}` : '∞' }}</dd></div>
-              <div><dt>{{ t('price') }}</dt><dd>{{ price ? price.text : '—' }}</dd></div>
+              <div v-if="sys.show_expire"><dt>{{ t('expire') }}</dt><dd>{{ expire ? expire.text : '—' }}</dd></div>
+              <div v-if="sys.show_price"><dt>{{ t('price') }}</dt><dd>{{ price ? price.text : '—' }}</dd></div>
               <div><dt>{{ t('os') }}</dt><dd>{{ osLabel(server.os) }}</dd></div>
               <div><dt>{{ t('arch') }}</dt><dd>{{ server.arch || '—' }}</dd></div>
               <div><dt>{{ t('region') }}</dt><dd>{{ regionLabel(server.region, locale) }}</dd></div>

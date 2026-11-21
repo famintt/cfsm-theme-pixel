@@ -8,8 +8,7 @@ import {
   formatBytes,
   formatSpeed,
   isServerOnline,
-  latencyRoutes,
-  monthTraffic,
+  latencyRoutes, utcMonthlyTraffic, trafficUsage, validNumber, capacityPair,
   osIconUrl,
   pairBytes,
   priceInfo,
@@ -35,7 +34,7 @@ const osIcon = computed(() => osIconUrl(props.server.os))
 const cores = computed(() => Number(props.server.cpu_cores) || 0)
 const cpuPct = computed(() => {
   const value = Number(props.server.cpu)
-  return Number.isFinite(value) ? Math.max(0, Math.min(100, value)) : 0
+  return validNumber(props.server.cpu) && value >= 0 ? Math.max(0, Math.min(100, value)) : null
 })
 const ramPct = computed(() => serverRamPercent(props.server))
 const diskPct = computed(() => serverDiskPercent(props.server))
@@ -59,20 +58,13 @@ const loadFoot = computed(() =>
   loadValues.value.map((value) => (Number.isFinite(value) ? value.toFixed(2) : '0.00')).join(' / ')
 )
 
-const ramFoot = computed(() => {
-  const used = (Number(props.server.ram_used) || 0) * 1024 * 1024
-  const total = (Number(props.server.ram_total) || 0) * 1024 * 1024
-  return total > 0 ? pairBytes(used, total) : '—'
-})
-const diskFoot = computed(() => {
-  const used = (Number(props.server.disk_used) || 0) * 1024 * 1024
-  const total = (Number(props.server.disk_total) || 0) * 1024 * 1024
-  return total > 0 ? pairBytes(used, total) : '—'
-})
+const ramFoot = computed(() => capacityPair(props.server?.ram_used, props.server?.ram_total))
+const diskFoot = computed(() => capacityPair(props.server?.disk_used, props.server?.disk_total))
 
 const limit = computed(() => trafficLimitBytes(props.server))
-const usedTraffic = computed(() => monthTraffic(props.server))
-const trafficPct = computed(() => (limit.value > 0 ? trafficPercent(props.server) : 0))
+const monthly = computed(() => utcMonthlyTraffic(props.server, monitor.now))
+const usedTraffic = computed(() => trafficUsage(props.server, monitor.now))
+const trafficPct = computed(() => (limit.value > 0 ? trafficPercent(props.server, monitor.now) : 0))
 const trafficText = computed(() => {
   if (limit.value > 0) return `${formatBytes(usedTraffic.value)} / ${formatBytes(limit.value)}`
   return `${formatBytes(usedTraffic.value)} / ∞`
@@ -83,7 +75,7 @@ const price = computed(() => priceInfo(props.server))
 const uptimeDays = computed(() => Math.floor(serverUptimeSeconds(props.server, monitor.now) / 86400))
 
 const showTraffic = computed(() => Boolean(sys.value.show_tf))
-const showPings = computed(() => Boolean(sys.value.show_three_net_details))
+const showPings = computed(() => online.value && Boolean(sys.value.show_three_net_details))
 
 const latRows = computed(() => {
   const names = {
@@ -104,7 +96,8 @@ const latRows = computed(() => {
       name: names[key],
       ok,
       ms,
-      lossText: Number.isFinite(loss) && loss > 0 ? `${loss.toFixed(1)}%` : '',
+      lossText: lossRaw === null ? t('timeout') : lossRaw === false || lossRaw === undefined || lossRaw === '' ? '—' : Number.isFinite(loss) ? `${loss.toFixed(1)}%` : '—',
+      timeout: route.state === 'timeout',
       lossBad: Number.isFinite(loss) && loss > 0,
       tone: ok ? (ms < 120 ? 'good' : ms < 250 ? 'warn' : 'bad') : 'off',
       // gauge: 0-500ms mapped onto the dot row
@@ -117,8 +110,10 @@ const latColor = (tone) =>
   tone === 'good' ? '#22c55e' : tone === 'warn' ? '#eab308' : tone === 'bad' ? '#ef4444' : '#3a3b42'
 
 const fmtPct = (value) => {
-  const number = Math.max(0, Math.min(100, Number(value) || 0))
-  return number < 10 ? number.toFixed(2) : number.toFixed(1)
+  const number = Number(value)
+  if (value === null || value === undefined || value === false || !Number.isFinite(number)) return '—'
+  const safe = Math.max(0, Math.min(100, number))
+  return safe < 10 ? safe.toFixed(2) : safe.toFixed(1)
 }
 </script>
 
@@ -138,7 +133,7 @@ const fmtPct = (value) => {
         <div class="metric-top">
           <AppIcon name="cpu" :size="14" class="tone-cpu" />
           <span class="metric-label tone-cpu">{{ t('cpu') }}</span>
-          <span class="metric-value">{{ online ? fmtPct(cpuPct) : '—' }}<span>%</span></span>
+          <span class="metric-value">{{ online ? fmtPct(cpuPct) : '—' }}<span v-if="online && cpuPct !== null">%</span></span>
         </div>
         <div class="metric-sub">{{ cores ? t('cores', { n: cores }) : '—' }}</div>
         <SegBar :value="online ? cpuPct : 0" :cells="15" :height="7" :color="'#3ea6ff'" />
@@ -148,7 +143,7 @@ const fmtPct = (value) => {
         <div class="metric-top">
           <AppIcon name="memory" :size="14" class="tone-ram" />
           <span class="metric-label tone-ram">{{ t('memory') }}</span>
-          <span class="metric-value">{{ online ? fmtPct(ramPct) : '—' }}<span>%</span></span>
+          <span class="metric-value">{{ online ? fmtPct(ramPct) : '—' }}<span v-if="online && ramPct !== null">%</span></span>
         </div>
         <div class="metric-sub">{{ ramFoot }}</div>
         <SegBar :value="online ? ramPct : 0" :cells="15" :height="7" :color="'#a855f7'" />
@@ -158,7 +153,7 @@ const fmtPct = (value) => {
         <div class="metric-top">
           <AppIcon name="disk" :size="14" class="tone-disk" />
           <span class="metric-label tone-disk">{{ t('disk') }}</span>
-          <span class="metric-value">{{ online ? fmtPct(diskPct) : '—' }}<span>%</span></span>
+          <span class="metric-value">{{ online ? fmtPct(diskPct) : '—' }}<span v-if="online && diskPct !== null">%</span></span>
         </div>
         <div class="metric-sub">{{ diskFoot }}</div>
         <SegBar :value="online ? diskPct : 0" :cells="15" :height="7" :color="'#f59e0b'" />
@@ -181,22 +176,22 @@ const fmtPct = (value) => {
       <div class="net-item">
         <AppIcon name="upload" :size="13" class="tone-up" />
         <span class="net-label">{{ t('upload') }}</span>
-        <span class="net-value tone-up">{{ formatSpeed(server.net_out_speed) }}</span>
+        <span class="net-value tone-up">{{ formatSpeed(online ? server.net_out_speed : null) }}</span>
       </div>
       <div class="net-item">
         <AppIcon name="download" :size="13" class="tone-down" />
         <span class="net-label">{{ t('download') }}</span>
-        <span class="net-value tone-down">{{ formatSpeed(server.net_in_speed) }}</span>
+        <span class="net-value tone-down">{{ formatSpeed(online ? server.net_in_speed : null) }}</span>
       </div>
-      <div class="net-item">
+      <div v-if="showTraffic" class="net-item">
         <AppIcon name="globe" :size="13" class="tone-up" />
         <span class="net-label">{{ t('monthOut') }}</span>
-        <span class="net-value">{{ formatBytes(server.net_tx_monthly) }}</span>
+        <span class="net-value">{{ formatBytes(monthly.tx) }}</span>
       </div>
-      <div class="net-item">
+      <div v-if="showTraffic" class="net-item">
         <AppIcon name="globe" :size="13" class="tone-down" />
         <span class="net-label">{{ t('monthIn') }}</span>
-        <span class="net-value">{{ formatBytes(server.net_rx_monthly) }}</span>
+        <span class="net-value">{{ formatBytes(monthly.rx) }}</span>
       </div>
     </div>
 
@@ -209,9 +204,10 @@ const fmtPct = (value) => {
         </span>
         <span class="traffic-value">
           <b>{{ trafficText }}</b>
-          <span v-if="limit > 0"> · {{ trafficPct.toFixed(1) }}%</span>
+          <span v-if="limit > 0 && monthly.eligible"> · {{ trafficPct.toFixed(1) }}%</span>
         </span>
       </div>
+      <p v-if="!monthly.eligible" class="metric-sub" role="note">{{ monthly.reason }}</p>
       <SegBar :value="trafficPct" :cells="22" :ramp="'heat'" :height="7" />
     </template>
 
@@ -221,10 +217,10 @@ const fmtPct = (value) => {
         <div v-for="row in latRows" :key="row.key" class="lat-row">
           <span class="lat-name">{{ row.name }}</span>
           <span class="lat-ms" :style="{ color: latColor(row.tone) }">
-            {{ row.ok ? `${row.ms} ms` : '—' }}
+            {{ row.ok ? `${row.ms} ms` : row.timeout ? t('timeout') : '—' }}
           </span>
           <span class="lat-loss" :style="row.lossBad ? { color: '#f59e0b' } : null">
-            {{ row.lossText || '0%' }}
+            {{ row.lossText }}
           </span>
           <DotRow class="lat-dots" :value="row.gauge" :total="22" :color="latColor(row.tone)" />
         </div>
@@ -232,16 +228,16 @@ const fmtPct = (value) => {
     </template>
 
     <div class="node-foot">
-      <div class="foot-cell">
+      <div v-if="sys.show_expire" class="foot-cell">
         <span class="foot-label">{{ t('expire') }}</span>
         <span
           class="foot-value"
           :style="expire && expire.tone === 'bad' ? { color: '#f87171' } : expire && expire.tone === 'warn' ? { color: '#fbbf24' } : null"
         >
-          {{ expire ? `${Math.max(0, expire.days)} ${t('days')}` : '∞' }}
+          {{ expire ? expire.text : '—' }}
         </span>
       </div>
-      <div class="foot-cell">
+      <div v-if="sys.show_price" class="foot-cell">
         <span class="foot-label">{{ t('price') }}</span>
         <span class="foot-value">{{ price ? price.text : '—' }}</span>
       </div>

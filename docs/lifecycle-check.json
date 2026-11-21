@@ -1,0 +1,9 @@
+{
+  "checks": [
+    "WebSocket constructor failure retains valid REST detail and falls back to polling",
+    "Deadline pauses transport, dismissed modal keeps pause, changing node makes no GET, explicit resume loads selected detail",
+    "REST refresh replaces the whole detail snapshot, removing revoked price/tags/expiry",
+    "Navigating away during pending detail leaves dashboard active without stale error or invalid-ID request"
+  ],
+  "errors": []
+}

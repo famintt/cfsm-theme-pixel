@@ -1,4 +1,6 @@
-import { ONLINE_THRESHOLD_MS, publicAssetUrl } from './config'
+import { ONLINE_THRESHOLD_MS, publicAssetUrl } from './config.js'
+import { utcMonthlyTraffic, aggregateMonthlyTraffic, utcMonth, validNumber } from './monthly.js'
+export { utcMonthlyTraffic, aggregateMonthlyTraffic, utcMonth, validNumber }
 
 const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
 
@@ -81,21 +83,21 @@ const OS_META = [
 ]
 
 export function formatBytes(bytes, digits = 1) {
+  if (!validNumber(bytes) || Number(bytes) < 0) return '—'
   const value = Number(bytes)
-  if (!Number.isFinite(value) || value <= 0) return '0 B'
-  const index = Math.min(Math.floor(Math.log(value) / Math.log(1024)), BYTE_UNITS.length - 1)
-  const scaled = value / 1024 ** index
-  const fixed = scaled >= 100 ? scaled.toFixed(0) : scaled.toFixed(digits)
-  return `${Number(fixed)} ${BYTE_UNITS[index]}`
+  if (value === 0) return '0 B'
+  const index = Math.max(0, Math.min(Math.floor(Math.log(value) / Math.log(1024)), BYTE_UNITS.length - 1))
+  return `${Number((value / 1024 ** index).toFixed(digits))} ${BYTE_UNITS[index]}`
 }
 
 export function formatSpeed(bytesPerSecond) {
-  return `${formatBytes(bytesPerSecond)}/s`
+  const text = formatBytes(bytesPerSecond)
+  return text === '—' ? text : `${text}/s`
 }
 
 export function formatNumber(value, digits = 0) {
+  if (!validNumber(value) || Number(value) < 0) return '—'
   const number = Number(value)
-  if (!Number.isFinite(number)) return '0'
   return number.toLocaleString('en-US', {
     minimumFractionDigits: digits,
     maximumFractionDigits: digits
@@ -109,8 +111,9 @@ export function clampPercent(value) {
 }
 
 export function percent(used, total) {
+  if (!validNumber(used) || !validNumber(total)) return null
   const totalNumber = Number(total)
-  if (!Number.isFinite(totalNumber) || totalNumber <= 0) return 0
+  if (!Number.isFinite(totalNumber) || totalNumber <= 0 || Number(used) < 0) return null
   return clampPercent((Number(used) / totalNumber) * 100)
 }
 
@@ -126,14 +129,23 @@ export function serverSwapPercent(server) {
   return percent(server?.swap_used, server?.swap_total)
 }
 
-export function monthTraffic(server) {
-  return (Number(server?.net_rx_monthly) || 0) + (Number(server?.net_tx_monthly) || 0)
+export function monthTraffic(server, now = Date.now()) {
+  return utcMonthlyTraffic(server || {}, now).total
+}
+
+export function trafficUsage(server, now = Date.now()) {
+  const month = utcMonthlyTraffic(server || {}, now)
+  if (!month.eligible) return null
+  if (server.traffic_calc_type === 'dl') return month.rx
+  if (server.traffic_calc_type === 'ul') return month.tx
+  if (server.traffic_calc_type === 'max') return Math.max(month.rx, month.tx)
+  return month.total
 }
 
 export function trafficLimitBytes(server) {
   const raw = server?.traffic_limit
   if (raw === undefined || raw === null || raw === '') return 0
-  if (typeof raw === 'number') return raw > 0 ? raw * 1024 ** 3 : 0
+  if (typeof raw === 'number') return Number.isFinite(raw) && raw > 0 ? raw * 1024 ** 3 : 0
   const text = String(raw).trim().toUpperCase()
   const match = text.match(/^([\d.]+)\s*(TB|T|GB|G|MB|M|KB|K|B)?$/)
   if (!match) return 0
@@ -144,10 +156,11 @@ export function trafficLimitBytes(server) {
   return value * 1024 ** (powers[unit] ?? 3)
 }
 
-export function trafficPercent(server) {
+export function trafficPercent(server, now = Date.now()) {
   const limit = trafficLimitBytes(server)
-  if (!limit) return 0
-  return clampPercent((monthTraffic(server) / limit) * 100)
+  const used = trafficUsage(server, now)
+  if (!limit || used === null) return 0
+  return Math.max(0, (used / limit) * 100)
 }
 
 export function usageTone(value) {
@@ -159,9 +172,16 @@ export function usageTone(value) {
 }
 
 export function normalizeTimestamp(value) {
+  if (!validNumber(value)) {
+    if (value === '') return 0
+    if (typeof value === 'string' && value.trim()) {
+      const parsed = Date.parse(value)
+      return Number.isFinite(parsed) ? parsed : 0
+    }
+    return 0
+  }
   const number = Number(value)
-  if (!Number.isFinite(number) || number <= 0) return 0
-  return number < 1e12 ? number * 1000 : number
+  return number > 0 ? (number < 1e11 ? number * 1000 : number) : 0
 }
 
 export function serverTimestamp(server) {
@@ -172,13 +192,12 @@ export function serverTimestamp(server) {
 
 export function isServerOnline(server, now = Date.now()) {
   const updated = serverTimestamp(server)
-  return Boolean(updated && now - updated < ONLINE_THRESHOLD_MS)
+  return Boolean(updated && now - updated < ONLINE_THRESHOLD_MS && now - updated >= -60000)
 }
 
 export function regionCode(region) {
   const code = String(region || '').trim().toUpperCase()
-  if (!code || code === 'UNKNOWN' || code === 'XX') return ''
-  return code === 'TW' ? 'CN' : code
+  return /^[A-Z]{2}$/.test(code) && code !== 'XX' ? code : ''
 }
 
 export function flagUrl(region) {
@@ -272,20 +291,20 @@ export function formatClock(value = new Date(), locale = 'zh') {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false
+    hour12: false, timeZone: 'UTC'
   }).format(value)
 }
 
 export function formatDateTime(value, locale = 'zh') {
-  const date = value instanceof Date ? value : new Date(normalizeTimestamp(value) || Date.now())
-  if (Number.isNaN(date.getTime())) return '-'
+  const date = value instanceof Date ? value : new Date(normalizeTimestamp(value) || NaN)
+  if (Number.isNaN(date.getTime())) return '—'
   return new Intl.DateTimeFormat(locale === 'en' ? 'en-GB' : 'zh-CN', {
     month: '2-digit',
     day: '2-digit',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
-    hour12: false
+    hour12: false, timeZone: 'UTC'
   }).format(date)
 }
 
@@ -356,6 +375,7 @@ export function elapsedText(timestamp, now = Date.now(), locale = 'zh') {
  * meter feet ("34.58 / 122.07 MB"). Different units fall back to two values.
  */
 export function pairBytes(used, total) {
+  if (!validNumber(used) || !validNumber(total)) return `${formatBytes(used)} / ${formatBytes(total)}`
   const u = Math.max(0, Number(used) || 0)
   const t = Math.max(0, Number(total) || 0)
   const unitOf = (n) => (n < 1 ? 0 : Math.min(Math.floor(Math.log(n) / Math.log(1024)), BYTE_UNITS.length - 1))
@@ -368,12 +388,8 @@ export function pairBytes(used, total) {
 }
 
 export function latencyState(value) {
-  if (value === false || value === undefined || value === null) {
-    return value === null ? 'timeout' : 'off'
-  }
-  const number = Number(value)
-  if (!Number.isFinite(number) || number < 0 || number === 0) return 'off'
-  return 'ok'
+  if (value === null) return 'timeout'
+  return validNumber(value) && Number(value) >= 0 ? 'ok' : 'off'
 }
 
 export function latencyTone(value) {
@@ -426,7 +442,10 @@ export function axisTimeLabel(timestamp, spanHours) {
   const date = new Date(normalizeTimestamp(timestamp))
   if (Number.isNaN(date.getTime())) return ''
   const pad = (n) => String(n).padStart(2, '0')
-  if (spanHours <= 1) return `${pad(date.getHours())}:${pad(date.getMinutes())}`
-  if (spanHours <= 24) return `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  if (spanHours <= 1) return `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`
+  if (spanHours <= 24) return `${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`
   return `${date.getMonth() + 1}/${date.getDate()}`
 }
+
+export function formatPercent(value,digits=0){return validNumber(value)&&Number(value)>=0?clampPercent(value).toFixed(digits)+'%':'—'}
+export function capacityPair(used,total){return pairBytes(validNumber(used)&&Number(used)>=0?Number(used)*1048576:null,validNumber(total)&&Number(total)>0?Number(total)*1048576:null)}

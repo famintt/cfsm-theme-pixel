@@ -1,6 +1,6 @@
 <script setup>
 import { RouterView } from 'vue-router'
-import { monitor } from './stores/monitor'
+import { monitor, resumeAllSockets } from './stores/monitor'
 import { t } from './utils/i18n'
 import TurnstileGate from './components/TurnstileGate.vue'
 import WsTimeoutModal from './components/WsTimeoutModal.vue'
@@ -23,15 +23,19 @@ import AppIcon from './components/AppIcon.vue'
     </div>
   </Transition>
 
-  <TurnstileGate v-if="monitor.turnstileRequired" />
   <WsTimeoutModal v-if="monitor.wsTimeout" />
+  <div v-if="monitor.wsTimeoutDismissed" class="app-toast" role="status">
+    <span>{{ t('paused') }}</span><button class="btn" type="button" @click="resumeAllSockets">{{ t('wsTimeoutContinue') }}</button>
+  </div>
 
   <Transition name="toast">
     <div v-if="monitor.unauthorized" class="auth-gate">
       <div class="auth-card glass">
-        <span class="auth-spinner"><AppIcon name="refresh" :size="22" class="spin" /></span>
+        <AppIcon name="alert" :size="22" />
         <h2>{{ monitor.config?.site_title || t('siteFallback') }}</h2>
-        <p>{{ t('adminLogin') }}</p>
+        <p>{{ monitor.error || t('adminLogin') }}</p>
+        <a class="btn" href="/admin#/admin">{{ t('admin') }}</a>
+        <button class="btn" type="button" @click="monitor.unauthorized=false">{{ t('close') }}</button>
       </div>
     </div>
   </Transition>

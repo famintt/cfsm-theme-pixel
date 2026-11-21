@@ -23,14 +23,15 @@ function normalizeBase(value) {
 }
 
 export function getApiBases() {
-  const meta = document.querySelector('meta[name="apiBase"]')
-  const content = meta?.getAttribute('content')?.trim() || ''
-  const bases = content
-    .split(',')
-    .map((item) => normalizeBase(item))
-    .filter(Boolean)
-  if (bases.length > 0) return [...new Set(bases)]
-  return [window.location.origin]
+  const raw = document.querySelector('meta[name="apiBase"]')?.getAttribute('content')?.trim() || ''
+  const parts = raw.split(',').map(value => value.trim()).filter(Boolean)
+  if (parts.length > 1) throw new Error('仅支持单个同源后端，不支持多个 apiBase')
+  const origin = window.location.origin
+  const url = new URL(parts[0] || origin, origin)
+  if (url.origin !== origin || url.username || url.password || url.pathname !== '/' || url.search || url.hash) {
+    throw new Error('apiBase 必须是单个同源根地址')
+  }
+  return [url.origin]
 }
 
 export function isExternalApiBase() {
@@ -50,16 +51,8 @@ export function apiUrl(base, path) {
 }
 
 export function publicAssetUrl(path) {
-  const clean = String(path || '').replace(/^\/+/, '')
-  if (!clean) return './'
-  const base = getApiBases()[0]
-  try {
-    const url = new URL(base)
-    if (url.origin !== window.location.origin) return `${url.origin}/${clean}`
-  } catch {
-    /* fall back to the same-origin default skin */
-  }
-  return `/${clean}`
+  const clean=String(path || '').replace(/^\/+/, '')
+  return clean ? `/${clean}` : './'
 }
 
 export function getWsUrl(base, { subscribe = 'all', token = '' } = {}) {
@@ -81,11 +74,10 @@ export function getJwtToken() {
 }
 
 export function getTurnstileVerified() {
-  try {
-    return sessionStorage.getItem(STORAGE_KEYS.turnstileVerified) || ''
-  } catch {
-    return ''
+  for (const storage of ['sessionStorage', 'localStorage']) {
+    try { const value = globalThis[storage]?.getItem(STORAGE_KEYS.turnstileVerified); if (value) return value } catch { /* optional browser storage */ }
   }
+  return ''
 }
 
 export function setTurnstileVerified(value) {
@@ -125,13 +117,6 @@ export function clearAuthState() {
 }
 
 export function adminUrl() {
-  const base = getApiBases()[0]
-  try {
-    const url = new URL(base)
-    if (url.origin !== window.location.origin) return `${url.origin}/admin#/admin`
-  } catch {
-    /* fall back to same-origin admin */
-  }
   return '/admin#/admin'
 }
 

@@ -1,0 +1,16 @@
+{
+  "checks": [
+    "1440px default: six cards, zero RTT, UTC coverage, no horizontal overflow",
+    "390px default: six cards, zero RTT, UTC coverage, no horizontal overflow",
+    "Direct detail: one initial GET, single-node WS, metrics-alias update, hidden/visible recovery without full-list request",
+    "401: actionable authentication error; closable gate; no forced navigation",
+    "403: actionable authentication error; closable gate; no forced navigation",
+    "Direct detail: all backend show_* switches respected",
+    "Mixed reset days and missing CPU/memory/disk: explicit partial monthly sum, no rendering crash or fabricated zero",
+    "Upload-only billing: 3 GB / 1 GB and 300%, while whole-month totals remain bidirectional",
+    "Same-node retry after 404 performs a new GET and recovers the detail page"
+  ],
+  "errors": [],
+  "externalRequests": [],
+  "allApiRequestsReadOnly": true
+}

@@ -6,7 +6,10 @@
   "description": "Pixel theme for CF-Server-Monitor",
   "scripts": {
     "dev": "vite",
+    "demo": "node scripts/demo.mjs",
     "build": "vite build",
+    "build:theme": "node scripts/build-theme.mjs",
+    "test": "node --test test/client.test.mjs test/monthly.test.mjs test/format.test.mjs test/http.test.mjs",
     "preview": "vite preview"
   },
   "dependencies": {

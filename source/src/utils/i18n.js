@@ -1,5 +1,5 @@
 import { ref } from 'vue'
-import { STORAGE_KEYS } from './config'
+import { STORAGE_KEYS } from './config.js'
 
 const messages = {
   zh: {
@@ -14,7 +14,8 @@ const messages = {
     totalNodes: '节点总数',
     onlineNodes: '在线节点',
     offlineNodes: '离线节点',
-    monthTraffic: '本月流量',
+    monthTraffic: '本月流量 · UTC',
+    monthlyPartial: '部分节点未计入',
     liveSpeed: '实时速率',
     avgLatency: '平均延迟',
     download: '下行',
@@ -55,8 +56,8 @@ const messages = {
     used: '已用',
     total: '总量',
     traffic: '流量',
-    monthIn: '本期入站',
-    monthOut: '本期出站',
+    monthIn: '本月入站 · UTC',
+    monthOut: '本月出站 · UTC',
     loss: '丢包',
     days: '天',
     cores: '{n} 核',
@@ -148,7 +149,7 @@ const messages = {
     compact: '紧凑',
     language: '语言',
     settingsSaved: '外观设置已保存',
-    settingsLocal: '登录后可同步外观设置',
+    settingsLocal: '外观偏好仅保存在本浏览器',
     wsTimeoutTitle: '实时连接已超时',
     wsTimeoutHint: '为了降低资源消耗，实时连接已暂停。是否继续接收实时更新？',
     wsTimeoutContinue: '继续接收',
@@ -206,7 +207,8 @@ const messages = {
     totalNodes: 'Nodes',
     onlineNodes: 'Online',
     offlineNodes: 'Offline',
-    monthTraffic: 'Month traffic',
+    monthTraffic: 'Month traffic · UTC',
+    monthlyPartial: 'Some nodes excluded',
     liveSpeed: 'Live speed',
     avgLatency: 'Avg latency',
     download: 'Down',
@@ -340,7 +342,7 @@ const messages = {
     compact: 'Compact',
     language: 'Language',
     settingsSaved: 'Appearance saved',
-    settingsLocal: 'Sign in to sync appearance',
+    settingsLocal: 'Appearance preferences are stored only in this browser',
     wsTimeoutTitle: 'Live connection paused',
     wsTimeoutHint: 'The live connection timed out to save resources. Continue receiving updates?',
     wsTimeoutContinue: 'Continue',
